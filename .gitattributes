@@ -1,0 +1,5 @@
+# Giữ nguyên từng byte của bài nộp: sha256 trong manifest.csv / .sha256 / release_id tính trên bytes.
+# Không cho Git đổi LF <-> CRLF khi checkout trên Windows.
+submission/r*/** -text
+submission/de_an/** -text
+submission/lineage.jsonl -text
