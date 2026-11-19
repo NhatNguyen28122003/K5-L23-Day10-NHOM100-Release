@@ -2,7 +2,7 @@
 
 - Seed luyện tập: 3007 (release_id v1: `lab250_95697c6d4612`)
 - Seed phụ để thử validator: 4001; lô sạch: `runs/clean` (seed 5, `--no-faults`)
-- Repo: https://github.com/NhatNguyen28122003/K5-L23-Day10-AnHai-Dataset-Release-Handover
+- Repo: https://github.com/NhatNguyen28122003/K5-L23-Day10-NHOM100-Release
 
 | Họ và tên | MSHV | Tài khoản GitHub | Phần chính |
 |---|---|---|---|
