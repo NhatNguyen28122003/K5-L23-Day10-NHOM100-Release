@@ -1,0 +1,129 @@
+{
+  "candidates": [
+    {
+      "image": "img_0019",
+      "type_guess": "swap",
+      "det_class": "cell phone",
+      "pan_class": "remote",
+      "box_px": [
+        167.7,
+        73.9,
+        280.3,
+        235.4
+      ],
+      "segment_id": 5848192,
+      "score": 2.991,
+      "reason": "box 'cell phone' trùng khít segment 'remote' (IoU 0.99); ảnh cho thấy detection sai -> class_swap, panoptic sai -> category_swap"
+    },
+    {
+      "image": "img_0029",
+      "type_guess": "swap",
+      "det_class": "couch",
+      "pan_class": "chair",
+      "box_px": [
+        443.2,
+        0.4,
+        499.4,
+        66.5
+      ],
+      "segment_id": 5028415,
+      "score": 2.963,
+      "reason": "box 'couch' trùng khít segment 'chair' (IoU 0.96); ảnh cho thấy detection sai -> class_swap, panoptic sai -> category_swap"
+    },
+    {
+      "image": "img_0041",
+      "type_guess": "missing_box",
+      "det_class": null,
+      "pan_class": "knife",
+      "box_px": null,
+      "segment_id": 7853798,
+      "score": 0.506,
+      "reason": "segment 'knife' 989 px (0.6% ảnh) không có box cùng lớp"
+    },
+    {
+      "image": "img_0056",
+      "type_guess": "bbox_drift",
+      "det_class": "truck",
+      "pan_class": "truck",
+      "box_px": [
+        0.0,
+        115.3,
+        42.8,
+        261.4
+      ],
+      "segment_id": 9100039,
+      "score": 1.17,
+      "reason": "chỉ 83% pixel segment 'truck' nằm trong box (IoU box/segment 0.74)"
+    },
+    {
+      "image": "img_0065",
+      "type_guess": "swap",
+      "det_class": "cow",
+      "pan_class": "horse",
+      "box_px": [
+        1.3,
+        103.2,
+        481.6,
+        631.7
+      ],
+      "segment_id": 8226673,
+      "score": 2.996,
+      "reason": "box 'cow' trùng khít segment 'horse' (IoU 1.00); ảnh cho thấy detection sai -> class_swap, panoptic sai -> category_swap"
+    },
+    {
+      "image": "img_0108",
+      "type_guess": "swap",
+      "det_class": "laptop",
+      "pan_class": "tv",
+      "box_px": [
+        0.0,
+        100.7,
+        493.6,
+        355.8
+      ],
+      "segment_id": 13393080,
+      "score": 2.993,
+      "reason": "box 'laptop' trùng khít segment 'tv' (IoU 0.99); ảnh cho thấy detection sai -> class_swap, panoptic sai -> category_swap"
+    },
+    {
+      "image": "img_0171",
+      "type_guess": "bbox_drift",
+      "det_class": "cup",
+      "pan_class": "cup",
+      "box_px": [
+        282.2,
+        69.6,
+        375.0,
+        235.1
+      ],
+      "segment_id": 4353265,
+      "score": 1.102,
+      "reason": "chỉ 90% pixel segment 'cup' nằm trong box (IoU box/segment 0.69)"
+    },
+    {
+      "image": "img_0177",
+      "type_guess": "missing_box",
+      "det_class": null,
+      "pan_class": "laptop",
+      "box_px": null,
+      "segment_id": 14975133,
+      "score": 0.795,
+      "reason": "segment 'laptop' 55284 px (29.5% ảnh) không có box cùng lớp"
+    },
+    {
+      "image": "img_0190",
+      "type_guess": "swap",
+      "det_class": "cow",
+      "pan_class": "horse",
+      "box_px": [
+        0.0,
+        16.1,
+        89.1,
+        421.9
+      ],
+      "segment_id": 10396941,
+      "score": 2.99,
+      "reason": "box 'cow' trùng khít segment 'horse' (IoU 0.99); ảnh cho thấy detection sai -> class_swap, panoptic sai -> category_swap"
+    }
+  ]
+}
