@@ -1,5 +1,5 @@
 image,type,verdict,note
-000000007511,missing_box,comfirmed,"[Nhất] gán thiếu box của person."
+000000007511,missing-box,confirmed,"[Nhất] gán thiếu box của person."
 000000007795,missing-box,confirmed,"[Nhất] gán thiếu box của Bed 1."
 000000009483,class_swap, confirmed,"[Kỳ] Vật bên phải là màn hình rời, có bàn phím riêng bên trái. Detection ghi nhầm laptop, còn nhãn panoptic tv phù hợp."
 000000013291,instance_merge, confirmed,"[Kỳ] Đĩa của người áo xanh bên trái và đĩa ở giữa ảnh có hai box frisbee riêng, nhưng cùng thuộc một segment panoptic."
