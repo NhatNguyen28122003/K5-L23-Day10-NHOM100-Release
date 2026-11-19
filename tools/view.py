@@ -9,12 +9,16 @@ Công cụ này ĐƯỢC dùng Pillow (validator thì không). Cài: py -m pip i
   # vẽ vài ảnh bất kỳ (tên không đuôi)
   py tools/view.py runs/r3007/delivery --image 000000009483 000000023272 --out runs/r3007/review_img
 
+  # vẽ cả lô (ứng viên lên trước, rồi mọi ảnh còn lại) để lướt
+  py tools/view.py runs/r3007/delivery --candidates runs/r3007/candidates.json --all --out runs/r3007/review_img
+
   # đề ẩn (tên ảnh dạng img_0001) — chạy y hệt
   py tools/view.py delivery --candidates submission/de_an/candidates.json --out submission/de_an/review_img
 
 Mỗi ảnh ra một file PNG gồm hai nửa:
   TRÁI : ảnh gốc, mọi box detection (xanh dương, tên lớp detection), mọi segment thing (viền vàng, tên lớp panoptic);
          box và segment của ứng viên tô đậm (box đỏ, segment tô xanh lá).
+         instance_merge: tô đỏ MỌI box cùng lớp chứa >= 20% pixel của segment (không chỉ box đầu tiên).
   PHẢI : vùng quanh ứng viên, cắt ra và phóng to (ảnh nhỏ cỡ 240x320 vẫn nhìn rõ).
 Kèm index.html: mở bằng trình duyệt để lướt cả hàng đợi, có lý do và gợi ý từng ứng viên.
 """
@@ -33,6 +37,7 @@ BOX_CAND = (230, 30, 30)    # box của ứng viên
 SEG = (255, 200, 0)         # viền segment thing
 SEG_CAND = (0, 200, 80)     # segment của ứng viên
 CROP_MIN = 520              # cạnh nhỏ nhất của ảnh phóng to
+MERGE_SHARE = 0.20          # khớp validator: box giữ >= 20% pixel segment thì tô đỏ
 
 
 def font(size: int):
@@ -99,6 +104,8 @@ def render(lot: Lot, img: str, cand: dict | None, out_dir: Path) -> Path | None:
     f = font(max(11, W // 45))
     focus = []  # vùng cần phóng to
 
+    cand_bin = None  # mask nhị phân (L) của segment ứng viên, dùng để tìm các box cùng lớp
+
     # segment thing: viền vàng + tên lớp panoptic; segment ứng viên tô xanh lá
     if mp.is_file() and img in lot.anns:
         mask = Image.open(mp).convert("RGB")
@@ -109,6 +116,7 @@ def render(lot: Lot, img: str, cand: dict | None, out_dir: Path) -> Path | None:
             binm = segment_mask(mask, s["id"])
             is_c = cand is not None and cand.get("segment_id") == s["id"]
             if is_c:
+                cand_bin = binm
                 canvas.paste(Image.new("RGB", (W, H), SEG_CAND), (0, 0), binm.point(lambda v: 110 if v else 0))
             edge = outline(binm)
             canvas.paste(Image.new("RGB", (W, H), SEG_CAND if is_c else SEG), (0, 0), edge)
@@ -120,10 +128,17 @@ def render(lot: Lot, img: str, cand: dict | None, out_dir: Path) -> Path | None:
                 if is_c:
                     focus.append(bb)
 
-    # box detection: xanh dương + tên lớp detection; box ứng viên màu đỏ, nét dày
+    # box detection: xanh dương + tên lớp detection; box ứng viên màu đỏ, nét dày.
+    # instance_merge: tô đỏ MỌI box cùng lớp chứa >= MERGE_SHARE pixel của segment
     cbox = tuple(cand["box_px"]) if cand and cand.get("box_px") else None
+    merge = bool(cand) and cand.get("type_guess") == "instance_merge" and cand_bin is not None
+    seg_total = max(1, cand_bin.histogram()[255]) if merge else 1
     for name, bx in lot.boxes(img, W, H):
         is_c = cbox is not None and all(abs(a - b) < 1.0 for a, b in zip(bx, cbox))
+        if merge and not is_c and name == cand.get("pan_class"):
+            x1, y1, x2, y2 = (int(round(v)) for v in bx)
+            part = cand_bin.crop((max(0, x1), max(0, y1), min(W, x2), min(H, y2)))
+            is_c = part.histogram()[255] / seg_total >= MERGE_SHARE
         col = BOX_CAND if is_c else BOX
         draw.rectangle(bx, outline=col, width=3 if is_c else 2)
         draw.text((bx[0] + 2, bx[1] + 1), f"D:{name}", fill=col, font=f, stroke_width=2, stroke_fill=(255, 255, 255))
@@ -183,6 +198,7 @@ def main() -> int:
     ap.add_argument("delivery", type=Path)
     ap.add_argument("--candidates", type=Path, help="candidates.json do validator ghi")
     ap.add_argument("--image", nargs="*", default=[], help="tên ảnh (không đuôi) muốn xem thêm")
+    ap.add_argument("--all", action="store_true", help="vẽ cả lô (mọi ảnh trong manifest) để lướt")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
 
@@ -192,8 +208,11 @@ def main() -> int:
         for c in json.loads(args.candidates.read_text(encoding="utf-8"))["candidates"]:
             todo.append((c["image"], c))
     todo += [(i, None) for i in args.image]
+    if args.all:
+        seen = {i for i, _ in todo}
+        todo += [(i, None) for i in sorted(lot.manifest) if i not in seen]
     if not todo:
-        ap.error("cần --candidates hoặc --image")
+        ap.error("cần --candidates, --image hoặc --all")
 
     rows = []
     for img, cand in todo:
