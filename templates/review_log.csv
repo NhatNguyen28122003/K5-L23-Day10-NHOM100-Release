@@ -1,8 +1,2 @@
 image,type,verdict,note
-000000999007,class_swap,confirmed,"mở ảnh: xe tải mui kín, nhãn detection ghi car; panoptic ghi truck đúng"
-000000999009,bbox_drift,rejected,"box lệch mask do vật bị che một phần; nhãn hợp lý"
-000000023272,class_swap,confirmed,"Ảnh cho thấy ô tô, không phải xe bus. Detection gắn bus sai, panoptic gắn car đúng."
-000000023781,category_swap,confirmed,"Ảnh cho thấy củ carrot ở góc bên phải. Detection gắn carrot đúng, panoptic gắn motorcycle sai."
-000000019742,category_swap,confirmed,"Vật trong khung đỏ là bình thủy tinh có chân. Detection ghi vase phù hợp với vật, còn panoptic gán nhầm baseball bat."
-000000022589,bbox_drift,confirmed,"Khung đỏ của con cừu phía sau lệch sang trái. Cạnh phải cắt qua phần lông bên phải, trong khi phía trái khung chứa một phần lưng con cừu phía trước."
 
