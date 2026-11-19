@@ -1,9 +1,3 @@
 image,type,verdict,note
-000000007511,missing_box,confirmed,"[Nhất] gán thiếu box của person."
-000000007795,missing_box,confirmed,"[Nhất] gán thiếu box của Bed 1."
-000000009483,class_swap, confirmed,"[Kỳ] Vật bên phải là màn hình rời, có bàn phím riêng bên trái. Detection ghi nhầm laptop, còn nhãn panoptic tv phù hợp."
-000000013291,instance_merge, confirmed,"[Kỳ] Đĩa của người áo xanh bên trái và đĩa ở giữa ảnh có hai box frisbee riêng, nhưng cùng thuộc một segment panoptic."
-000000019742,category_swap,confirmed,"[Thúy] Vật trong khung đỏ là bình thủy tinh có chân. Detection ghi vase phù hợp với vật, còn panoptic gán nhầm baseball bat."
-000000022589,bbox_drift,confirmed,"[Thúy] Khung đỏ của con cừu phía sau lệch sang trái. Cạnh phải cắt qua phần lông bên phải, trong khi phía trái khung chứa một phần lưng con cừu phía trước."
-000000023272,class_swap,confirmed,"[Đồng] Ảnh cho thấy ô tô, không phải xe bus. Detection gắn bus sai, panoptic gắn car đúng."
-000000023781,category_swap,confirmed,"[Đồng] Ảnh cho thấy củ carrot ở góc bên phải. Detection gắn carrot đúng, panoptic gắn motorcycle sai."
+000000999007,class_swap,confirmed,"mở ảnh: xe tải mui kín, nhãn detection ghi car; panoptic ghi truck đúng"
+000000999009,bbox_drift,rejected,"box lệch mask do vật bị che một phần; nhãn hợp lý"

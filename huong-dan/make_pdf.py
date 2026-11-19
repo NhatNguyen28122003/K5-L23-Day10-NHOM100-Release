@@ -61,7 +61,10 @@ def inline(text: str) -> str:
 
 
 def code_block(lines: list[str]) -> Table:
-    pre = Preformatted("\n".join(lines), S["code"])
+    longest = max((len(x) for x in lines), default=1)
+    size = min(8.6, (170 * mm - 16) / (longest * 0.55))  # Consolas rộng ~0,55 em/ký tự: dòng dài thì thu nhỏ chữ
+    style = ParagraphStyle("codefit", parent=S["code"], fontSize=size, leading=size * 1.34)
+    pre = Preformatted("\n".join(lines), style)
     t = Table([[pre]], colWidths=[170 * mm])
     t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), CODE_BG), ("BOX", (0, 0), (-1, -1), 0.5, GRID),
                            ("LEFTPADDING", (0, 0), (-1, -1), 7), ("TOPPADDING", (0, 0), (-1, -1), 5),

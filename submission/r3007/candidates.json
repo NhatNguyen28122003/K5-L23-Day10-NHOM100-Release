@@ -1,0 +1,114 @@
+{
+  "candidates": [
+    {
+      "image": "000000007511",
+      "type_guess": "missing_box",
+      "det_class": null,
+      "pan_class": "person",
+      "box_px": null,
+      "segment_id": 3026996,
+      "score": 0.547,
+      "reason": "segment 'person' 14530 px (4.7% ảnh) không có box cùng lớp"
+    },
+    {
+      "image": "000000007795",
+      "type_guess": "missing_box",
+      "det_class": null,
+      "pan_class": "bed",
+      "box_px": null,
+      "segment_id": 7435899,
+      "score": 0.757,
+      "reason": "segment 'bed' 70150 px (25.7% ảnh) không có box cùng lớp"
+    },
+    {
+      "image": "000000009483",
+      "type_guess": "swap",
+      "det_class": "laptop",
+      "pan_class": "tv",
+      "box_px": [
+        458.8,
+        210.3,
+        579.0,
+        349.5
+      ],
+      "segment_id": 9270375,
+      "score": 2.966,
+      "reason": "box 'laptop' trùng khít segment 'tv' (IoU 0.97); ảnh cho thấy detection sai -> class_swap, panoptic sai -> category_swap"
+    },
+    {
+      "image": "000000013291",
+      "type_guess": "instance_merge",
+      "det_class": "frisbee",
+      "pan_class": "frisbee",
+      "box_px": [
+        90.1,
+        151.9,
+        136.0,
+        194.4
+      ],
+      "segment_id": 13419440,
+      "score": 1.872,
+      "reason": "segment 'frisbee' trải trên 2 box cùng lớp (phần pixel trong từng box: 63%, 37%)"
+    },
+    {
+      "image": "000000019742",
+      "type_guess": "swap",
+      "det_class": "vase",
+      "pan_class": "baseball bat",
+      "box_px": [
+        172.3,
+        72.4,
+        338.7,
+        347.1
+      ],
+      "segment_id": 1257078,
+      "score": 2.986,
+      "reason": "box 'vase' trùng khít segment 'baseball bat' (IoU 0.99); ảnh cho thấy detection sai -> class_swap, panoptic sai -> category_swap"
+    },
+    {
+      "image": "000000022589",
+      "type_guess": "bbox_drift",
+      "det_class": "sheep",
+      "pan_class": "sheep",
+      "box_px": [
+        147.1,
+        207.0,
+        327.3,
+        335.8
+      ],
+      "segment_id": 6189719,
+      "score": 1.141,
+      "reason": "chỉ 86% pixel segment 'sheep' nằm trong box (IoU box/segment 0.60)"
+    },
+    {
+      "image": "000000023272",
+      "type_guess": "swap",
+      "det_class": "bus",
+      "pan_class": "car",
+      "box_px": [
+        0.0,
+        0.1,
+        499.5,
+        371.1
+      ],
+      "segment_id": 7369075,
+      "score": 2.996,
+      "reason": "box 'bus' trùng khít segment 'car' (IoU 1.00); ảnh cho thấy detection sai -> class_swap, panoptic sai -> category_swap"
+    },
+    {
+      "image": "000000023781",
+      "type_guess": "swap",
+      "det_class": "carrot",
+      "pan_class": "motorcycle",
+      "box_px": [
+        379.8,
+        362.7,
+        482.3,
+        422.0
+      ],
+      "segment_id": 5595317,
+      "score": 2.954,
+      "reason": "box 'carrot' trùng khít segment 'motorcycle' (IoU 0.95); ảnh cho thấy detection sai -> class_swap, panoptic sai -> category_swap"
+    }
+  ]
+}
