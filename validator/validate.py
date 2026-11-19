@@ -24,7 +24,7 @@ import hashlib
 import json
 import struct
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -215,22 +215,48 @@ def check_invalid_category_id(d: Delivery) -> list[str]:
     return [img for img, ann in d.ann_by_image.items() if any(s["category_id"] not in valid for s in ann["segments_info"])]
 
 
+class MaskInfo:
+    """Kết quả đọc một mask panoptic.
+    counts : số pixel THẬT của từng segment id (dùng cho thing_overlap).
+    points : toạ độ (x, y) lấy mẫu mỗi SAMPLE_STEP pixel theo hai trục (dùng cho đối chiếu Pha 2)."""
+
+    def __init__(self, width: int, height: int, counts: dict[int, int], points: dict[int, list[tuple[int, int]]]):
+        self.width, self.height, self.counts, self.points = width, height, counts, points
+
+
+SAMPLE_STEP = 2  # lấy 1/4 số pixel: tỉ lệ vẫn chính xác, chạy nhanh gấp ~4 lần
+
+
+def read_mask(path: Path) -> MaskInfo:
+    """Đọc mask (id = R + G*256 + B*256^2): đếm pixel từng id và lấy mẫu toạ độ."""
+    width, height, pixels = read_rgb(path)
+    rgb = Counter(zip(pixels[0::3], pixels[1::3], pixels[2::3]))  # đếm ở tốc độ C
+    counts = {r + g * 256 + b * 65536: n for (r, g, b), n in rgb.items()}
+    points: dict[int, list[tuple[int, int]]] = defaultdict(list)
+    stride = width * 3
+    for y in range(0, height, SAMPLE_STEP):
+        row = pixels[y * stride : (y + 1) * stride]
+        step = 3 * SAMPLE_STEP
+        for k, (r, g, b) in enumerate(zip(row[0::step], row[1::step], row[2::step])):
+            sid = r + g * 256 + b * 65536
+            if sid:
+                points[sid].append((k * SAMPLE_STEP, y))
+    return MaskInfo(width, height, counts, points)
+
+
 def count_mask_pixels(path: Path) -> dict[int, int]:
     """Đếm pixel của từng segment id trong mask (id = R + G*256 + B*256^2)."""
-    _, _, pixels = read_rgb(path)
-    counts: dict[int, int] = defaultdict(int)
-    for i in range(0, len(pixels), 3):
-        counts[pixels[i] + pixels[i + 1] * 256 + pixels[i + 2] * 65536] += 1
-    return counts
+    return read_mask(path).counts
 
 
 def check_thing_overlap(d: Delivery, mask_counts: dict[str, dict[int, int]]) -> list[str]:
     """area khai trong segments_info LỚN HƠN số pixel thật -> segment bị vật khác đè. Bỏ id 0 (nền)."""
     bad = []
     for img, ann in d.ann_by_image.items():
-        counts = mask_counts.get(img)
-        if counts is None:
+        info = mask_counts.get(img)
+        if info is None:
             continue
+        counts = info.counts
         for seg in ann["segments_info"]:
             if seg["id"] != 0 and seg["area"] > counts.get(seg["id"], 0) + OVERLAP_TOL_PX:
                 bad.append(img)
@@ -238,10 +264,139 @@ def check_thing_overlap(d: Delivery, mask_counts: dict[str, dict[int, int]]) -> 
     return bad
 
 
-# ============================================================ Pha 2 (sẽ viết)
-def find_candidates(d: Delivery, mask_counts) -> list[dict]:
-    """Đối chiếu detection <-> panoptic. Pha 2 sẽ điền."""
-    return []
+# ============================================================ Pha 2: đối chiếu detection <-> panoptic
+# Ứng viên KHÔNG phải lỗi: người trong nhóm phải mở ảnh rồi mới ghi confirmed/rejected.
+# Tín hiệu chính là PIXEL của mask, không phải IoU giữa hai bbox (GUIDE Pha 2).
+SWAP_IOU = 0.85          # box và segment khác lớp trùng khít (IoU box vs bbox-pixel của segment) -> nghi đổi lớp
+OWN_MATCH_IOU = 0.70     # box "đã có segment của mình" nếu khớp một segment cùng lớp tới mức này
+DRIFT_INSIDE_MAX = 0.90  # segment cùng lớp chỉ còn < 90% pixel nằm trong box -> nghi box lệch
+DRIFT_INSIDE_MIN = 0.0   #   box có thể dời xa hẳn khỏi vật; điều kiện kích thước + "segment chưa có chủ" giữ độ chính xác
+DRIFT_SIZE = (0.7, 1.4)  #   box dời chỗ giữ nguyên kích thước: rộng/cao box chia bbox segment trong khoảng này
+DRIFT_MIN_PX = 400       #   bỏ vật < ~20x20 px: lệch 1-2 px do lấy mẫu đã kéo tỉ lệ xuống (6/6 ca trên lô sạch là vật nhỏ)
+MISSING_MIN_FRAC = 0.005 # segment thing chiếm >= 0,5% ảnh mà không box cùng lớp nào ôm được -> nghi thiếu box
+MISSING_COVER = 0.50     #   "ôm được" = box chứa >= 50% pixel của segment
+MERGE_SHARE = 0.20       # một segment có >= 20% pixel nằm trong MỖI box của >= 2 box cùng lớp -> nghi gộp
+
+
+def _iou(a, b) -> float:
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _inside(points, box) -> float:
+    """Tỉ lệ pixel (đã lấy mẫu) của segment nằm trong box."""
+    if not points:
+        return 0.0
+    x1, y1, x2, y2 = box[0] - SAMPLE_STEP, box[1] - SAMPLE_STEP, box[2] + SAMPLE_STEP, box[3] + SAMPLE_STEP
+    return sum(1 for x, y in points if x1 <= x <= x2 and y1 <= y <= y2) / len(points)
+
+
+def find_candidates(d: Delivery, masks: dict[str, MaskInfo], skip: set[str] = frozenset()) -> list[dict]:
+    """Ghép box detection với segment panoptic (qua TÊN lớp) và sinh ứng viên 5 loại.
+    Mỗi ảnh giữ nhiều nhất MỘT ứng viên (mỗi ảnh mang nhiều nhất một lỗi), ưu tiên tín hiệu mạnh nhất.
+    skip: ảnh đã có lỗi luật -> không sinh ứng viên (một ảnh chỉ mang một lỗi)."""
+    cat_name = {c["id"]: c["name"] for c in d.panoptic["categories"]}
+    is_thing = {c["id"]: c.get("isthing", 0) == 1 for c in d.panoptic["categories"]}
+    out = []
+    for img, ann in d.ann_by_image.items():
+        info = masks.get(img)
+        if info is None or img not in d.manifest or img in skip:
+            continue
+        W, H = info.width, info.height
+        boxes = []
+        for b in d.boxes(img):
+            if b[0] in d.classes:
+                x1, y1, x2, y2 = to_pixels(b, W, H)
+                boxes.append({"name": d.classes[b[0]], "box": (x1, y1, x2, y2)})
+        segs = []
+        for s in ann["segments_info"]:
+            if not is_thing.get(s["category_id"]) or s.get("iscrowd"):
+                continue  # bỏ stuff (trời, đường...) và crowd: không có box tương ứng
+            pts = info.points.get(s["id"], [])
+            if not pts:
+                continue
+            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+            segs.append({"id": s["id"], "name": cat_name.get(s["category_id"], "?"), "pts": pts,
+                         "n": info.counts.get(s["id"], 0),
+                         "bbox": (min(xs), min(ys), max(xs) + SAMPLE_STEP, max(ys) + SAMPLE_STEP)})
+        if not segs and not boxes:
+            continue
+
+        inside = {(i, j): _inside(s["pts"], b["box"]) for i, b in enumerate(boxes) for j, s in enumerate(segs)}
+        iou = {(i, j): _iou(b["box"], s["bbox"]) for i, b in enumerate(boxes) for j, s in enumerate(segs)}
+        found = []  # (độ mạnh, ứng viên)
+
+        def cand(kind, score, reason, box=None, seg=None):
+            found.append((score, {"image": img, "type_guess": kind,
+                                  "det_class": box["name"] if box else None,
+                                  "pan_class": seg["name"] if seg else None,
+                                  "box_px": [round(v, 1) for v in box["box"]] if box else None,
+                                  "segment_id": seg["id"] if seg else None,
+                                  "score": round(score, 3), "reason": reason}))
+
+        # box i "có segment của mình" nếu khớp một segment CÙNG lớp đủ tốt
+        def box_has_own(i):
+            return any(iou[i, j] >= OWN_MATCH_IOU for j, s in enumerate(segs) if s["name"] == boxes[i]["name"])
+
+        def seg_has_own(j):
+            return any(iou[i, j] >= OWN_MATCH_IOU for i, b in enumerate(boxes) if b["name"] == segs[j]["name"])
+
+        swapped_segs = set()
+        # 1) Lệch lớp: box và segment trùng khít nhưng khác tên lớp -> class_swap HOẶC category_swap (xem ảnh mới biết)
+        for i, b in enumerate(boxes):
+            for j, s in enumerate(segs):
+                if s["name"] != b["name"] and iou[i, j] >= SWAP_IOU and not box_has_own(i) and not seg_has_own(j):
+                    swapped_segs.add(j)
+                    cand("swap", 2.0 + iou[i, j], f"box '{b['name']}' trùng khít segment '{s['name']}' (IoU {iou[i, j]:.2f}); "
+                         "ảnh cho thấy detection sai -> class_swap, panoptic sai -> category_swap", b, s)
+
+        # 2) instance_merge: một segment trải trên >= 2 box cùng lớp, mỗi box giữ >= MERGE_SHARE pixel của nó
+        merged_segs = set()
+        for j, s in enumerate(segs):
+            holders = [i for i, b in enumerate(boxes) if b["name"] == s["name"] and inside[i, j] >= MERGE_SHARE
+                       and not any(iou[i, k] >= OWN_MATCH_IOU for k, t in enumerate(segs) if k != j and t["name"] == s["name"])]
+            # hai vật bị gộp: KHÔNG box riêng nào ôm trọn cả segment (box nào chứa >= 90% thì segment là của box đó)
+            if len(holders) >= 2 and all(inside[i, j] < 0.9 for i in holders):
+                merged_segs.add(j)
+                shares = ", ".join(f"{inside[i, j]:.0%}" for i in holders)
+                cand("instance_merge", 1.5 + min(inside[i, j] for i in holders),
+                     f"segment '{s['name']}' trải trên {len(holders)} box cùng lớp (phần pixel trong từng box: {shares})",
+                     boxes[holders[0]], s)
+
+        # 3) bbox_drift: box và segment cùng lớp khớp nhất, nhưng một phần đáng kể pixel segment rơi ra ngoài box.
+        #    Box bị dời giữ nguyên KÍCH THƯỚC -> kích thước box ~ bbox segment; và segment không thuộc box cùng lớp nào khác.
+        for i, b in enumerate(boxes):
+            same = [(inside[i, j], j) for j, s in enumerate(segs) if s["name"] == b["name"] and j not in merged_segs]
+            if not same:
+                continue
+            frac, j = max(same)
+            claimed = any(inside[k, j] >= 0.9 for k, o in enumerate(boxes) if k != i and o["name"] == b["name"])
+            bw, bh = b["box"][2] - b["box"][0], b["box"][3] - b["box"][1]
+            sw, sh = segs[j]["bbox"][2] - segs[j]["bbox"][0], segs[j]["bbox"][3] - segs[j]["bbox"][1]
+            same_size = sw > 0 and sh > 0 and DRIFT_SIZE[0] <= bw / sw <= DRIFT_SIZE[1] and DRIFT_SIZE[0] <= bh / sh <= DRIFT_SIZE[1]
+            big_enough = segs[j]["n"] >= DRIFT_MIN_PX
+            if DRIFT_INSIDE_MIN <= frac < DRIFT_INSIDE_MAX and same_size and not claimed and big_enough:
+                cand("bbox_drift", 1.0 + (1 - frac), f"chỉ {frac:.0%} pixel segment '{segs[j]['name']}' nằm trong box "
+                     f"(IoU box/segment {iou[i, j]:.2f})", b, segs[j])
+
+        # 4) missing_box: segment thing đủ lớn, không crowd, không box cùng lớp nào ôm được
+        for j, s in enumerate(segs):
+            if j in swapped_segs or j in merged_segs or s["n"] < MISSING_MIN_FRAC * W * H:
+                continue
+            if not any(inside[i, j] >= MISSING_COVER for i, b in enumerate(boxes) if b["name"] == s["name"]):
+                cand("missing_box", 0.5 + min(s["n"] / (W * H), 0.5),
+                     f"segment '{s['name']}' {s['n']} px ({s['n'] / (W * H):.1%} ảnh) không có box cùng lớp", None, s)
+
+        if found:
+            found.sort(key=lambda t: -t[0])
+            best = found[0][1]
+            if len(found) > 1:
+                best["also"] = [f"{c['type_guess']} ({c['reason']})" for _, c in found[1:4]]
+            out.append(best)
+    return out
 
 
 # ============================================================ main
@@ -257,7 +412,7 @@ def main() -> int:
     for img in d.manifest:
         p = d.path(img, "mask")
         if p.is_file():
-            mask_counts[img] = count_mask_pixels(p)
+            mask_counts[img] = read_mask(p)
 
     missing = check_missing_image(d)
     found: list[tuple[str, str]] = [("missing_image", t) for t in missing]
@@ -282,7 +437,7 @@ def main() -> int:
         print(f"  {t:22s} {n}")
 
     if args.candidates:
-        cands = find_candidates(d, mask_counts)
+        cands = find_candidates(d, mask_counts, {e["target"] for e in errors})
         args.candidates.parent.mkdir(parents=True, exist_ok=True)
         args.candidates.write_text(json.dumps({"candidates": cands}, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"{len(cands)} ứng viên -> {args.candidates}")
